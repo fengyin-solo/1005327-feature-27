@@ -8,6 +8,7 @@
       <div class="page-actions">
         <button class="btn primary" type="button" @click="openCreate">登记探方验收单</button>
         <button class="btn" type="button" @click="exportRows">导出探方验收清单</button>
+        <button class="btn" type="button" @click="exportPacks">按类别分送打包</button>
       </div>
     </header>
 
@@ -65,6 +66,7 @@
 
     <footer class="page-foot">
       <span>共 {{ total }} 条探方验收记录</span>
+      <span v-if="infoMessage" class="info-text">{{ infoMessage }}</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
     </footer>
   </section>
@@ -79,6 +81,7 @@ import {
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
+import { downloadAcceptancePacks } from '@/api/acceptance-export'
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('acceptance')
@@ -90,6 +93,7 @@ const stats = [{"label": "待验收探方", "value": 0}, {"label": "已通过探
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
+const infoMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
 const statusSummary = computed(() =>
@@ -105,7 +109,16 @@ function resetFilters() {
 }
 
 function exportRows() {
-  downloadEntries(meta.key)
+  infoMessage.value = ''
+  // 两路导出读同一份验收单数据、过同一套筛选条件，导出条目与列表对得上。
+  downloadEntries(meta.key, filters.value)
+  infoMessage.value = `已按当前列表导出 ${rows.value.length} 条探方验收记录`
+}
+
+function exportPacks() {
+  infoMessage.value = ''
+  const summary = downloadAcceptancePacks(filters.value)
+  infoMessage.value = summary.messages.join('；')
 }
 
 function openCreate() {
@@ -114,6 +127,7 @@ function openCreate() {
 
 function runAction(action: string, row: EntryRow) {
   errorMessage.value = ''
+  infoMessage.value = ''
   const result = applyAction(meta.key, Number(row.id), action)
   if (!result.ok) {
     errorMessage.value = result.message
@@ -124,6 +138,7 @@ function runAction(action: string, row: EntryRow) {
 
 function reload() {
   errorMessage.value = ''
+  infoMessage.value = ''
   try {
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
